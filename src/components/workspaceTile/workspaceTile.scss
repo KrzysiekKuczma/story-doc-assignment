@@ -1,0 +1,28 @@
+.workspace-tile {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 24px;
+    color: #b7bec5;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    border-bottom: 2px solid transparent;
+    transition: border-bottom 0.5s ease-in-out;
+    &:hover,
+    &:focus {
+        border-bottom: 2px solid #007dfc;
+    }
+
+    svg {
+        fill: #b7bec5;
+    }
+
+    &.active {
+        color: #007dfc;
+
+        svg {
+            fill: #007dfc;
+        }
+    }
+}

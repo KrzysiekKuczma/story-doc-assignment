@@ -1,14 +1,16 @@
 .workspaces {
     border-radius: 16px;
-    background: #FFF;
-    box-shadow: 0px 0px 1px 0px rgba(18, 3, 62, 0.11), 0px 3px 5px 0px rgba(18, 3, 62, 0.10);
+    background: #fff;
+    box-shadow:
+        0px 0px 1px 0px rgba(18, 3, 62, 0.11),
+        0px 3px 5px 0px rgba(18, 3, 62, 0.1);
     width: 100%;
     max-width: 294px;
     height: 100%;
     display: flex;
     flex-direction: column;
     &-main {
-        padding: 8px;
+        padding: 24px;
         flex-grow: 1;
     }
     &-footer {
@@ -16,5 +18,10 @@
         align-items: center;
         justify-content: space-between;
         padding: 24px;
+    }
+    &-navigation-tiles {
+        display: flex;
+        flex-direction: column;
+        row-gap: 24px;
     }
 }
