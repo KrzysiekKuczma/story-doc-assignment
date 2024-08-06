@@ -1,22 +1,23 @@
-import { useDispatch } from "react-redux";
-import { addTask, moveSubtask, updateTask } from "../../store/slices";
-import { AppDispatch } from "../../store/store";
-import { Add } from "../../assets/icons/Add";
-import TaskCard from "../taskCard/taskCard";
-import { ITask, ITaskNested } from "../../store/types";
-import "./tasksSection.scss";
 import { FC } from "react";
 import {
-  useDrag,
   DragSourceMonitor,
-  useDrop,
   DropTargetMonitor,
+  useDrag,
+  useDrop,
 } from "react-dnd";
+import { useDispatch } from "react-redux";
+import { Add } from "../../assets/icons/Add";
+import { addTask, moveSubtask, updateTask } from "../../store/slices";
+import { AppDispatch } from "../../store/store";
+import { ITask } from "../../store/types";
 import { DragTypes } from "../../utils/dragTypes";
 import { generateNewTask } from "../../utils/tasks";
+import TreeNode from "../../utils/tree";
+import TaskCard from "../taskCard/taskCard";
+import "./tasksSection.scss";
 
 interface TasksSectionProps {
-  task: ITaskNested;
+  task: TreeNode;
 }
 
 const TasksSection: FC<TasksSectionProps> = ({ task }) => {
@@ -36,13 +37,15 @@ const TasksSection: FC<TasksSectionProps> = ({ task }) => {
     [],
   );
 
-  const [, drop] = useDrop(
+  const [{ isOver, isOverCurrent }, drop] = useDrop(
     () => ({
       accept: [DragTypes.TASKS_SECTION, DragTypes.TASK_CARD],
-      hover(payload: ITask) {
-        // const { index: overIndex } = findCard(id)
-        // moveCard(draggedId, overIndex)
-      },
+      // hover(payload: ITask) {
+      //   console.log(payload);
+      //   setTimeout(() => {
+      //     dispatch(moveSubtask({ id: payload.id, parentId: task.id }));
+      //   }, 200);
+      // },
       drop(_item: ITask, monitor) {
         const didDrop = monitor.didDrop();
         if (didDrop) return;
@@ -50,19 +53,12 @@ const TasksSection: FC<TasksSectionProps> = ({ task }) => {
         const { id: itemId } = _item;
         dispatch(moveSubtask({ id: itemId, parentId: task.id }));
 
-        // if (itemId !== task.id) {
-        //   const subtasksIDs = task.subtasks.map((t) => t.id);
-        //   console.log({ subtasksIDs });
-        //   dispatch(
-        //     updateTask({ id: task.id, subtasks: [...subtasksIDs, itemId] }),
-        //   );
-        // }
         return undefined;
       },
       collect: (monitor: DropTargetMonitor) => ({
         isOver: monitor.isOver(),
+        isOverCurrent: monitor.isOver({ shallow: true }),
         canDrop: monitor.canDrop(),
-        draggingColor: monitor.getItemType() as string,
       }),
     }),
     [],
@@ -83,7 +79,10 @@ const TasksSection: FC<TasksSectionProps> = ({ task }) => {
         return drag(drop(node));
       }}
       className={`tasks-section`}
-      style={{ opacity: isDragging ? 0.6 : 1 }}
+      style={{
+        opacity: isDragging ? 0.6 : 1,
+        background: isOverCurrent ? "rgba(0, 125, 252, 0.2)" : "transparent",
+      }}
     >
       <TaskCard key={task.id} task={task} />
       {task.subtasks?.length ? (

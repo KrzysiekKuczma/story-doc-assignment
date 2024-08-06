@@ -5,10 +5,16 @@ import {
   createSlice,
   PayloadAction,
 } from "@reduxjs/toolkit";
-import { IBoard, ITask } from "../types";
+import { IBoard, ITask, LocalDBUpdateTask } from "../types";
 import localDB from "../../db";
 import { RootState } from "../store";
-import { transformTasks } from "../../utils/transformations";
+import {
+  getNestedIds,
+  buildTree,
+  moveNode,
+  transformTreeToITasks,
+} from "../../utils/transformations";
+import { mergeAndUpdateTasks } from "../../utils/tasks";
 
 const initialState: IBoard = {
   tasks: [],
@@ -17,76 +23,47 @@ const initialState: IBoard = {
 const loadTasksFromDB = createAsyncThunk("board/loadTasksDB", async () => {
   return await localDB.tasks.toArray();
 });
+
+const removeTask = createAsyncThunk(
+  "board/removeTask",
+  async (id: string, thunkApi) => {
+    const state = thunkApi.getState() as RootState;
+    const tasks = state.board.tasks.slice();
+    const tasksToRemove = getNestedIds(tasks, id);
+    await localDB.tasks.bulkDelete(tasksToRemove);
+
+    tasksToRemove.forEach((removeId) => {
+      const foundIndex = tasks.findIndex((task) => task.id === removeId);
+      tasks.splice(foundIndex, 1);
+    });
+
+    return Promise.resolve(tasks);
+  },
+);
+
 const moveSubtask = createAsyncThunk(
   "board/moveSubtask",
   async (
-    ids: { id: string; parentId?: string },
-    thunkAPi,
+    ids: { id: string; parentId: string | null },
+    thunkApi,
   ): Promise<ITask[]> => {
-    const { id, parentId } = ids;
-    const state = thunkAPi.getState() as RootState;
-    const tasksToUpdate: {
-      key: string;
-      changes: { subtasks: string[] };
-    }[] = [];
+    const { id, parentId = null } = ids;
 
-    const tasks = state.board.tasks.slice();
-    console.log(state);
-    console.log(tasks);
+    const state = thunkApi.getState() as RootState;
+    const tasks = state.board.tasks;
+    const tree = buildTree(tasks);
+    const updatedTasks = transformTreeToITasks(moveNode(tree, id, parentId));
 
-    const subtaskIndex = tasks.findIndex((task) => task.id === id);
-    const parentIndex = tasks.findIndex((task) => task.id === parentId);
-    const previousParentIndex = tasks.findIndex((task) =>
-      task.subtasks.includes(id),
+    const updateObj = updatedTasks.reduce(
+      (prev: LocalDBUpdateTask[], curr): LocalDBUpdateTask[] => {
+        const { id: key, ...changes } = curr;
+        return [...prev, { key, changes }];
+      },
+      [],
     );
+    await localDB.tasks.bulkUpdate(updateObj);
 
-    console.log({ subtaskIndex, parentIndex, previousParentIndex });
-    if (previousParentIndex >= 0) {
-      const previousParentTask = tasks[previousParentIndex];
-      const subtaskIndex = previousParentTask.subtasks.findIndex(
-        (taskId) => taskId === id,
-      );
-      const cleanedParentSubtasks = [...previousParentTask.subtasks];
-      cleanedParentSubtasks.splice(subtaskIndex, 1);
-      tasks.splice(previousParentIndex, 1, {
-        ...previousParentTask,
-        subtasks: cleanedParentSubtasks,
-      });
-      tasksToUpdate.push({
-        key: previousParentTask.id,
-        changes: { subtasks: cleanedParentSubtasks },
-      });
-    }
-
-    if (parentIndex >= 0) {
-      const parrentTask = tasks[parentIndex];
-      if (parrentTask && !parrentTask.subtasks.includes(id)) {
-        console.log({ parrentTask });
-        tasks.splice(parentIndex, 1, {
-          ...parrentTask,
-          subtasks: [...parrentTask.subtasks, id],
-        });
-
-        tasksToUpdate.push({
-          key: parrentTask.id,
-          changes: { subtasks: tasks[parentIndex].subtasks },
-        });
-      }
-    }
-    const subtask = tasks[subtaskIndex];
-
-    console.log({ subtask });
-    tasksToUpdate.push({
-      key: subtask.id,
-      changes: { subtasks: subtask.subtasks },
-    });
-
-    console.log("All mutated");
-    // console.log({ tasksToUpdate });
-
-    await localDB.tasks.bulkUpdate(tasksToUpdate);
-    console.log({ tasks });
-    return Promise.resolve(tasks);
+    return Promise.resolve(mergeAndUpdateTasks(tasks, updatedTasks));
   },
 );
 
@@ -108,17 +85,7 @@ export const boardSlice = createSlice({
       const taskIndex = state.tasks.findIndex((task) => task.id === id);
       const oldTask = state.tasks.find((t) => t.id === id);
       const updated = { ...oldTask!, ...data };
-
-      // const old = state.tasks[taskIndex];
-
-      // console.log({ taskIndex, old, oldTask, updated });
       state.tasks.splice(taskIndex, 1, updated);
-    },
-    removeTask: (state, action: PayloadAction<string>) => {
-      const taskIndex = state.tasks.findIndex(
-        (task) => task.id === action.payload,
-      );
-      state.tasks.splice(taskIndex, 1);
     },
   },
   extraReducers: (builder) => {
@@ -126,27 +93,22 @@ export const boardSlice = createSlice({
       state.tasks = action.payload;
     });
     builder.addCase(moveSubtask.fulfilled, (state, action) => {
-      console.log({ state, action });
+      state.tasks = action.payload;
+    });
+    builder.addCase(removeTask.fulfilled, (state, action) => {
       state.tasks = action.payload;
     });
   },
 });
 
-export const { addTask, updateTask, removeTask } = boardSlice.actions;
+export const { addTask, updateTask } = boardSlice.actions;
 
+// Middleware listeners
 tasksDBHandlerMiddleware.startListening({
   actionCreator: addTask,
   effect: async (action, listenerApi) => {
     listenerApi.cancelActiveListeners();
     await localDB.tasks.add(action.payload);
-  },
-});
-
-tasksDBHandlerMiddleware.startListening({
-  actionCreator: removeTask,
-  effect: (action, listenerApi) => {
-    listenerApi.cancelActiveListeners();
-    localDB.tasks.delete(action.payload);
   },
 });
 
@@ -162,25 +124,14 @@ tasksDBHandlerMiddleware.startListening({
   },
 });
 
-// tasksDBHandlerMiddleware.startListening({
-//   actionCreator: moveSubtask,
-//   effect: (action, listenerApi) => {
-//     listenerApi.cancelActiveListeners();
-//     const { id, ...data } = action.payload;
-//     localDB.tasks.update(id, {
-//       ...data,
-//       updatedAt: new Date(Date.now()).toLocaleString(),
-//     });
-//   },
-// });
-
 const tasksSelector = (state: RootState) => state.board.tasks;
 
 // Selector for nesting all subtasks for tasks
 export const sortedTasks = createSelector(tasksSelector, (tasks) => {
-  return transformTasks(tasks);
+  const tree = buildTree(tasks);
+  return tree;
 });
 
-export { loadTasksFromDB, moveSubtask };
+export { loadTasksFromDB, moveSubtask, removeTask };
 
 export default boardSlice.reducer;

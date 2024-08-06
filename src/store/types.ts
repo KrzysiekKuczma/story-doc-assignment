@@ -1,3 +1,5 @@
+import TreeNode from "../utils/tree";
+
 export interface IBoard {
   tasks: ITask[];
 }
@@ -6,14 +8,8 @@ export type TasksOrder = {
   id: string;
 }[];
 
-export interface ITask {
-  content: string;
-  id: string;
+export type ITask = Omit<TreeNode, "subtasks"> & {
   subtasks: string[];
-  parent: string;
-  done: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+};
 
-export type ITaskNested = Omit<ITask, "subtasks"> & { subtasks: ITaskNested[] };
+export type LocalDBUpdateTask = { key: string; changes: Partial<ITask> };

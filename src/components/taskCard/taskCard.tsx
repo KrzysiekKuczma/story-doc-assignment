@@ -8,10 +8,10 @@ import {
 } from "react";
 import "./taskCard.scss";
 import { Edit, Trash } from "../../assets/icons";
-import { ITask, ITaskNested } from "../../store/types";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "../../store/store";
 import { removeTask, updateTask } from "../../store/slices";
+import TreeNode from "../../utils/tree";
 
 interface TaskCardProps {
   text: string;
@@ -52,7 +52,10 @@ const TaskCardInput = forwardRef<HTMLDivElement, TaskCardProps>(
   },
 );
 
-const TaskCard: FC<{ task: ITaskNested }> = ({ task }) => {
+const TaskCard: FC<{ task: TreeNode; style?: React.CSSProperties }> = ({
+  task,
+  style,
+}) => {
   const [isEditing, setEditing] = useState(false);
   const inputRef = useRef<HTMLDivElement>(null);
   const dispatch = useDispatch<AppDispatch>();
@@ -73,7 +76,7 @@ const TaskCard: FC<{ task: ITaskNested }> = ({ task }) => {
   }, [isEditing]);
 
   return (
-    <div className="task-card-container" tabIndex={0}>
+    <div className="task-card-container" style={style} tabIndex={0}>
       <TaskCardInput
         text={task.content}
         setText={handleTextUpdate}
